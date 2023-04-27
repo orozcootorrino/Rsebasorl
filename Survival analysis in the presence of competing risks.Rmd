@@ -1,0 +1,193 @@
+---
+title: "survival gilma pdf"
+author: "Dr Sebastian Orozco"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Análisis de supervivencia en presencia de riesgos competitivos - zhongheng zhang
+
+##Introducción
+Los riesgos competitivos surgen en la investigación clínica cuando hay más de un resultado posible durante el seguimiento de los datos de supervivencia, y otro puede impedir la aparición de un resultado de interés. Este último se denomina riesgo competitivo. En oncología clínica, por ejemplo, la mortalidad relacionada con el cáncer puede ser de interés principal, pero otras causas de muerte pueden prevenir su ocurrencia y las muertes causadas por razones distintas al cáncer son ejemplos típicos de riesgos competitivos. En las investigaciones de cuidados intensivos, los investigadores pueden examinar diferentes estrategias para mantener la permeabilidad venosa central en la unidad de cuidados intensivos (UCI). Los pacientes en diferentes grupos fueron seguidos por la aparición de falta de permeabilidad del lumen. Sin embargo, los pacientes pueden morir antes de que se produzca la falta de permeabilidad del lumen. La muerte se puede considerar como censura y el modelo de riesgo proporcional de Cox se puede aplicar para estimar el efecto de la covariable en el riesgo. Sin embargo, el efecto sobre el peligro no puede compararse directamente con la función de incidencia acumulada (CIF), por lo que se requieren otros métodos de modelado. Este artículo describirá diferentes enfoques para el análisis de supervivencia en presencia de riesgos competitivos. Se presentarán las ideas básicas de cada método y se proporcionará un código R detallado en el texto principal. También destaco la interpretación de la salida estadística producida por el código R.
+
+##Conceptos clave en el análisis de supervivencia con y sin riesgos competitivos
+Los datos de supervivencia se pueden caracterizar por la función de riesgo [ h ( t )] que proporciona una descripción dinámica del riesgo instantáneo de fallar en la supervivencia dada hasta el tiempo t. La función de riesgo acumulativo [ H ( t )] es la h ( t ) añadida a lo largo del tiempo de 0 a t. A diferencia de h ( t ), H ( t ) no tiene una interpretación probabilística simple. Sin embargo, una gráfica de contra t puede proporcionar información útil en el sentido de que su pendiente local se aproxima a la h ( t ) ( 7 ). Función de supervivencia [] puede estimarse de forma no paramétrica utilizando el estimador de Kaplan-Meier, y puede estimarse utilizando el estimador de Nelson-Aalen . En ausencia de riesgos competitivos, existe una correspondencia biunívoca entre S ( t ) y H ( t ):
+y el CIF es uno menos la función de supervivencia:
+Sin embargo, en presencia de riesgos competitivos, el CIF no puede vincularse directamente a la función de peligro. Sea 1 el evento de interés y 2 el evento de riesgo competitivo. Entonces la incidencia acumulada para el evento de interés se puede escribir como ( 8 ):
+donde es la función de supervivencia en el tiempo s y está determinada tanto por el evento de interés como por el evento competitivo. Por lo tanto, no existe una correspondencia biunívoca entre la incidencia acumulada [ F 1 ( t )] y el peligro específico de la causa [ h 1 ( s )]. La incidencia acumulada derivada del estimador de Kaplan-Meier siempre es mayor que la obtenida al contar los riesgos competitivos. En la estimación de Kaplan-Meier, un individuo se elimina del conjunto de riesgos cuando el individuo experimenta un evento competitivo. Dentro del marco de riesgo competitivo, el individuo es un evento en el cálculo de la probabilidad de supervivencia global. Por lo tanto, la supervivencia global [ S ( s)] de cualquier evento es menor cuando se consideran los riesgos en competencia. Cuando el evento 2 se considera como censura no informativa en el estimador de Kaplan-Meier, la supervivencia general será mayor . Si se considera el peligro como la tasa, la incidencia acumulada es el riesgo en términos epidemiológicos. En el análisis de riesgos competitivos, las personas que experimentan el evento de riesgo competitivo tienen cero probabilidades de experimentar el evento de interés. Por el contrario, el enfoque ingenuo de Kaplan-Meier asume que estos individuos experimentarían la misma probabilidad de evento de interés en teoría pura (censura no informativa). Así, este último sobrestima la incidencia acumulada del evento de interés.
+
+El efecto de las covariables en la tasa de riesgo se puede estimar mediante el modelo de regresión de riesgo proporcional COX. La exponenciación del coeficiente da la razón de riesgo (HR), que es la razón de tasa en epidemiología. Debido a que la función de riesgo tiene una correspondencia uno a uno con la incidencia acumulada, el HR también refleja el riesgo (incidencia acumulada) de la población de estudio. Sin embargo, esta relación no existe en presencia de riesgos en competencia. Aunque el modelo de regresión de peligro de causa específica representa el impacto de las covariables en el peligro de causa específica, no refleja necesariamente el impacto en la incidencia acumulada. Debido a que los médicos o investigadores pueden estar interesados ​​tanto en la tasa como en el riesgo, el impacto de las covariables en ambas cantidades se puede informar en paralelo en un artículo ( 2). El modelo Fine-Gray se desarrolló para vincular las covariables con la incidencia acumulada. Las estadísticas derivadas del modelo Fine-Gray son la relación de riesgo de subdistribución (SHR), que en realidad no es equivalente a la HR en el marco convencional ( 9 ). Lo ilustraré en los siguientes ejemplos.
+
+El ejemplo resuelto está contenido en el paquete riskRegression . Un total de 205 pacientes con melanoma se sometieron a una operación quirúrgica y fueron seguidos hasta fines de 1977. El conjunto de datos se puede cargar y visualizar de la siguiente manera.
+
+```{R}
+library(riskRegression)
+data(Melanoma)
+str(Melanoma) 
+```
+Hay 11 variables. El tiempo (tiempo) se midió en días desde la operación. El estado asume valores numéricos con 0= censurado; 1= murió por melanoma y 2= murió por otras causas. El evento está de acuerdo con el estado pero se convierte en una variable de factor con tres niveles. Otras variables son factores de riesgo bajo investigación que incluyen invasión, infiltración de células inflamatorias (ICI), úlcera, grosor, sexo, edad y grosor del tumor en escala logarítmica (logthick).
+
+##Comparación no paramétrica de CIF
+
+Los CIF para diferentes causas de falla se pueden emplear para la descripción estadística de los datos de supervivencia con riesgos competitivos. Esta tarea se puede realizar con el estimador Kaplan-Meier (KM) en situaciones sin riesgos competitivos. Sin embargo, el método KM puede dar estimaciones sesgadas porque toma los eventos de riesgo en competencia como censurados. Por lo tanto, los CIF para diferentes causas de falla brindan información adicional sobre los datos de supervivencia disponibles. La función cuminc() enviada con el paquete cmprsk puede estimar los CIF para diferentes causas de falla y permite comparaciones entre grupos.
+
+```{R}
+library (cmprsk)
+cif<-cuminc(ftime = Melanoma$time, fstatus =
+Melanoma$status, group=Melanoma$sex)
+plot (cif,col=1:4,xlab= "Days")
+```
+
+Los argumentos que especifican un CIF en cuminc() son similares a los de la función crr(). El primer argumento es una variable de tiempo de falla y el segundo toma una variable con código distinto para diferentes causas de falla. El argumento de grupo toma una variable que especifica grupos distintos. En el ejemplo, los pacientes se dividieron en grupos por sexo. Los CIF estimados se pueden visualizar con la función genérica plot(). La Figura 1 muestra que los pacientes masculinos tienen mayor riesgo de muerte por melanoma y otras causas que las mujeres. La diferencia parece mayor para el fracaso por melanoma frente al fracaso por otras causas. Para realizar una prueba estadística formal de la diferencia entre grupos, se puede utilizar la estadística χ 2 modificada ( 10 ).
+
+```{r}
+cif$Tests
+```
+
+La primera columna de la salida muestra la estadística χ 2 para la prueba entre grupos, y la segunda columna muestra los valores de P respectivos. Los pacientes masculinos tienen más probabilidades de morir de melanoma que las mujeres (P = 0,016), pero no existe una diferencia significativa en el riesgo de mortalidad por otras causas entre los pacientes masculinos y femeninos (P = 0,36).
+
+##Regresión de riesgo por causa específica
+
+El modelo de regresión de riesgo de causa específica se puede ajustar con la regresión de Cox al tratar las fallas de la causa de interés como eventos y la falla de otras causas como observación censurada. El efecto de las covariables sobre el peligro específico de la causa se puede estimar con la regresión de riesgo proporcional de COX. El modelo se ajusta a la función coxph() en el paquete de supervivencia.
+
+```{r}
+csh<-coxph(Surv(time,status==1)~sex+age+invasion,data=
+Melanoma)
+summary (csh)
+```
+El primer argumento de la función coxph() toma un objeto de clase Surv , donde el “status==1” indica que solo el valor de estado de 1 se considera como evento y otros valores se consideran censurados. La salida de resumen muestra los coeficientes y el HR correspondiente. Las últimas cinco líneas muestran estadísticas de la aptitud del modelo. La interpretación detallada de estas estadísticas se puede encontrar en mi tutorial anterior.
+
+Alternativamente, la tarea se puede realizar usando la función CSC() contenida en el paquete riskRegression .
+
+```{r}
+library(prodlim)
+library(riskRegression)
+CSH <- CSC (Hist(time,status)~sex+age+ invasion, data=Melanoma)
+summary(CSH)
+```
+El resultado de resumen es bastante similar al producido por la función coxph() excepto que la función CSC() produce automáticamente modelos de peligros específicos de causa para ambos tipos de eventos (causa 1 y 2). Con el modelo de regresión ajustado, se puede predecir el riesgo individual con covariables dadas. Por ejemplo, quiero predecir el riesgo de un paciente varón de 50 años y nivel de invasión 2.
+
+```{r}
+library(pec)
+pec:::predictEventProb(CSH, cause = 1, newdata = data.frame(
+  age = 50,
+  invasion = factor("level.2", levels = levels(Melanoma$invasion)),
+  sex = factor("Male", levels = levels(Melanoma$sex))), times = c(1000, 2000, 3000))
+
+```
+
+El resultado muestra que las incidencias acumuladas de muerte por melanoma en puntos de tiempo de 1000, 2000, 3000 días son 0,31, 0,53 y 0,67, respectivamente.
+
+##Modelo de riesgos de subdistribución (SH)
+El modelo SH también se conoce como modelo Fine-Gray. Es un modelo de regresión proporcional de Cox pero la incidencia acumulada está asociada a los HS. La motivación para el modelo Fine-Gray es que el efecto de una covariable en la función de riesgo de causa específica puede ser bastante diferente del de CIF. En otras palabras, una covariable puede tener una fuerte influencia en la función de riesgo de causa específica, pero no tener efecto en CIF ( 9 ). La diferencia entre el riesgo de causa específica y la subdistribución es que los eventos de riesgo en competencia se tratan de manera diferente. El primero considera los eventos de riesgo en competencia como una censura no informativa, mientras que el segundo tiene en cuenta la naturaleza de censura informativa de los eventos de riesgo en competencia ( 1 ).
+
+El modelo Fine-Gray se puede ajustar usando la función FGR() que se envía con el paquete riskRegression . Esta función llama a otra función crr() del paquete cmprsk .
+
+```{r}
+SH <- FGR(Hist(time, status)~sex+ age+ invasion, data=Melanoma) 
+#Argument cause missing. Analyse cause: 1
+SH
+```
+Como puede ver, el coeficiente estimado para la causa 1 se desvía un poco del obtenido del modelo de riesgo por causa específica (HR: 1,87 frente a 1,94), lo que refleja diferentes suposiciones para los riesgos competitivos. Los valores numéricos derivados del modelo Fine-Gray no tienen una interpretación simple, pero reflejan el orden de las curvas de incidencia acumulada ( 7 , 9 ). El peligro específico de la causa es la tasa de fracaso de la causa 1 por unidad de tiempo para los pacientes que todavía están vivos. Sin embargo, la causa 1 SH es la tasa de falla de la causa 1 por unidad de tiempo para los pacientes que están vivos o que ya fallaron por la causa 2. En otras palabras, los pacientes que fallan por otras causas todavía están en el grupo de riesgo ( 8 ) .
+
+El modelo Fine-Gray se puede ajustar con la función crr() en el paquete cmprsk . Los argumentos de la función son diferentes a los de la función FGR(). Aunque no se admite el uso de la fórmula del modelo, la función model.matrix se puede usar para generar matrices adecuadas de covariables a partir de factores.
+
+```{r}
+cov<-model.matrix(~sex + age + invasion, data = Melanoma)[,-1]
+crr.model <- crr(Melanoma$time,Melanoma$status,cov1 = cov)
+```
+
+##Predicción del modelo
+
+El modelo Fine-Gray ajustado se puede utilizar para predecir nuevas observaciones con combinaciones dadas de covariables. En el siguiente ejemplo, se proporciona un nuevo conjunto de datos que contiene tres pacientes. Para ellos se definen covariables de edad, sexo y niveles de invasión.
+
+```{r}
+newdata<-data.frame(sex= factor (c ("Male","Male","Female"),levels=levels (Melanoma$sex)), age=c(50,31,29), invasion =factor(c("level.2","level.1", "level.2"), levels=levels(Melanoma$invasion)))
+newdata
+```
+
+Las características de estos tres pacientes se muestran en el resultado anterior. El marco de datos debe transformarse en matriz y las variables factoriales en variables ficticias. La función predict() aplicada al objeto crr requiere que las columnas de cov estén en línea con las de la llamada original a la función crr(). Debido a que tanto el sexo como la invasión son variables factoriales, deben transformarse en variables ficticias con la función model.matrix(). Alternativamente, puede ser útil una función personalizada llamada factor2ind() escrita por Scrucca y sus colegas ( 11 ).
+
+```{r}
+dummy.new<-model.matrix(~sex+age+invasion,data=newdata)[,-1]
+dummy.new
+```
+
+El resultado anterior es exactamente lo que queremos. La variable sexo se codificó 1 para hombre y 0 para mujer. La invasión se transformó en dos variables 0/1. La edad es una variable continua y no cambia.
+
+```{r}
+pred<-predict(crr.model, dummy.new)
+plot (pred,lty= 1:3,col= 1:3, xlab= "Failure time (days)", ylab="Cumulative incidence function")
+legend("topleft",c("Male, age=50, invasion2", "Male, age=31, invasion1", "Female, age=29, invasion2"),lty=1:3,col=1:3)
+```
+Un objeto de la clase crr se pasa a la función predict(), seguido de una matriz que contiene combinaciones de covariables. La función predecir () devuelve una matriz (no se muestra) con la causa única = 1 veces de falla en la primera columna, y las otras columnas dan la función de subdistribución estimada correspondiente a las combinaciones de covariables en cada tiempo de falla. La función genérica plot() se puede aplicar para dibujar CIF para cada observación ( Figura 2 ).
+
+La predicción y el trazado son más convenientes usando funciones en el paquete riskRegression . La función riskRegression() proporciona una variedad de funciones de enlace para el modelo de regresión de supervivencia en presencia de riesgos competitivos ( 12 ).
+
+```{r}
+reg<-riskRegression (Hist(time, status) ~ sex + age +
+invasion, data = Melanoma, cause = 1,link="prop")
+plot(reg, newdata=newdata)
+```
+El resultado gráfico anterior proporciona CIF para pacientes con características especificadas en los nuevos datos . El argumento de enlace controla la función de enlace que se utilizará: "prop" para el modelo de regresión de Fine-Gray, "relativo" para el modelo de regresión de riesgo absoluto y "logística" para el modelo de regresión de riesgo logístico.
+
+##Modelo de diagnóstico
+
+Una suposición importante del modelo de regresión de Cox es la proporcionalidad, que supone que la subdistribución con covariables z es un cambio constante en la escala logarítmica complementaria desde una función de subdistribución de referencia. Las curvas no se cruzarán entre sí. La verificación del modelo se puede realizar inicialmente mediante un examen gráfico de los CIF.
+
+```{r}
+checkdata<-data.frame (sex=factor(c("Male", "Male","Male"), levels=levels(Melanoma$sex)),age=c(52,52,52),invasion=
+factor(c("level.0","level.1","level.2"), levels=levels(Melanoma$invasion)))
+plot(reg, newdata=checkdata,lty=1:3,col=1:3)
+text(2000, 1,"Covariates sex='Male'; age=52")
+legend("topleft",c("invasion.level0","invasion.level1","invasion.level2"),lty=1:3,col=1:3)
+```
+La Figura 3 muestra los CIF en diferentes niveles de invasión, fijando la edad en 52 años y el sexo en masculino. No hay evidencia de violación al supuesto de proporcionalidad para la variable invasión. Otro método para verificar la suposición proporcional es incluir una covariable dependiente del tiempo en el modelo de regresión.
+
+```{r}
+crr.time<-crr(Melanoma$time,Melanoma$status,cov1=cov,
+cov2=cov[,1],tf=function(t) t)
+summary (crr.time)
+```
+
+El argumento cov2 toma una matriz de covariables que se multiplicará por el tiempo. Las funciones del tiempo se especifican en el argumento tf . La función toma un vector de tiempos como argumento y devuelve una matriz. La j-ésima columna de la matriz de tiempo se multiplicará por la j-ésima columna de cov2. Por ejemplo, un modelo del formulario se puede especificar en la función crr() mediante (cov1 = x 1 , cov2=cbind( x 1, x 1 ), tf=function(t) cbind(t,t^2)). En el resultado de resumen del modelo Fine-Gray con covariable variable en el tiempo, el último término no muestra significación estadística (P=0,24), lo que indica que el efecto del sexo es constante en el tiempo. La regresión de riesgo proporciona una resolución simple para modelar la covariable variable en el tiempo.
+
+```{r}
+reg.time<-riskRegression (Hist (time, status) ~ sex + age +
+strata(invasion), data = Melanoma, cause = 1,link="prop")
+plotEffects (reg.time, formula=~invasion)
+```
+
+La figura 4 muestra los efectos dependientes del tiempo en el modelo de regresión de Fine-Gray para la mortalidad. La curva y el correspondiente intervalo de confianza del 95 % se dibujan con un método no paramétrico. Parece que los coeficientes para el nivel2 vs. 1 son más grandes durante el período de tiempo de 0 a 1000 que en otros tiempos, lo que indica algunas interacciones temporales leves ( 12 ). Sin embargo, la prueba estadística formal no está permitida en este entorno.
+
+Figura 4 Efectos dependientes del tiempo en el modelo de regresión de Fine-Gray para la invasión. Las estimaciones no paramétricas se muestran con intervalos de confianza puntuales del 95 %.
+
+El tercer método para la verificación de modelos emplea residuos de Schoenfeld.
+
+```{r}
+par(mfrow=c(2,2))
+for(j in 1:ncol(crr.model$res)) {scatter.smooth(crr.model$uft,crr.model$res[,j],
+main =names(crr.model$coef) [j],
+xlab="Failure time", ylab="Schoenfeld residuals")}
+```
+
+Tracé los residuos de Schoenfeld contra el tiempo de falla para cada covariable. Si la suposición proporcional es verdadera, el residuo debe tener una media constante a lo largo del tiempo. Se agrega un suavizador de diagrama de dispersión para cada covariable para verificar la suposición ( Figura 5 ). Parece que el nivel de invasión 1 tiene residuos no constantes a lo largo del tiempo, lo que indica una posible violación del supuesto proporcional. Para verificar formalmente la suposición del nivel 1 de invasión, podemos agregar un término de interacción con el tiempo.
+
+Figura 5 Residuos de Schoenfeld contra el tiempo de falla para cada covariable. Se observa que los residuos siguen una distribución no constante a lo largo de los tiempos de falla, lo que indica una posible violación del supuesto proporcional.
+
+```{r}
+crr.time2<-crr (Melanoma$time, Melanoma$status,cov1=cov, cov2=cov[,3],tf=function(t) t)
+crr.time3<-crr (Melanoma$time, Melanoma$status, cov1=cov, cov2=cbind(cov [,3], cov [,3]),tf=function(t) cbind(t,t^2),)
+crr.time2
+crr.time3
+```
+
+El modelo incluye un término de interacción con una función de tiempo lineal, lo que muestra que el término de interacción (tiempo*nivel de invasión1) es estadísticamente significativo (P=0,033).
+
+
